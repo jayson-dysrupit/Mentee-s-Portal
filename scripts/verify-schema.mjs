@@ -150,7 +150,7 @@ const ana = await signUp('ana.reyes@gmail.com', { full_name: 'Ana Reyes' })
 const ben = await signUp('bencruz21@yahoo.com', { full_name: 'Ben Cruz' })
 const sup = await signUp('sam@dysrupit.com', { full_name: 'Sam Lopez' })
 const other = await signUp('olive@dysrupit.com', { full_name: 'Olive Tan' })
-const boss = await signUp('mark.agao@dysrupit.com', { name: 'Mark Agao' })
+const boss = await signUp('mia.santos@dysrupit.com', { name: 'Mia Santos' })
 const bare = await signUp('noname@outlook.com')
 
 await equals('a profile row per auth user', 6, 'select count(*) from public.profiles')
@@ -162,7 +162,7 @@ await equals(
 )
 await equals(
   'the Google "name" claim is accepted too',
-  'Mark Agao',
+  'Mia Santos',
   `select full_name from public.profiles where id = $1`,
   [boss],
 )

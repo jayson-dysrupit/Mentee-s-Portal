@@ -114,18 +114,19 @@ then in the SQL editor:
 update public.profiles set role = 'admin' where email = 'you@dysrupit.com';
 ```
 
-**6. Set up an intern.** Have them sign in once, then link them:
+**6. Set up an intern.** New accounts are already `intern`, so there is nothing
+to promote — this only sets their hour target and team:
 
 ```sql
 update public.profiles
-   set supervisor_id  = (select id from public.profiles where email = 'supervisor@dysrupit.com'),
-       required_hours = 480,
+   set required_hours = 480,
        team           = 'Engineering'
  where email = 'intern.personal.address@gmail.com';
 ```
 
-Or promote a supervisor with `set role = 'supervisor'`. Roles are `intern`,
-`supervisor`, `admin`.
+Leave `required_hours` unset and the progress bar simply does not appear;
+nothing else changes. The roles are `intern` and `admin`, and nothing links an
+intern to a particular admin — every admin sees every intern.
 
 ## How it is put together
 
