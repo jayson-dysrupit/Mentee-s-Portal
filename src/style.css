@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    /* Plain warm ground. dysrupit.com carries no pattern — the previous
+       dot grid belonged to the other reference and has been removed. */
+    @apply bg-canvas font-sans text-ink;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-canvas;
+  }
+
+  ::selection {
+    @apply bg-brandSoft text-navy;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-line bg-surface shadow-card;
+  }
+
+  /* The floating white pill the site's header sits in. */
+  .bar {
+    @apply rounded-pill border border-line bg-surface shadow-bar;
+  }
+
+  .page-title {
+    @apply text-center text-[48px] font-bold leading-[1.08] tracking-[-0.02em] text-ink;
+  }
+
+  /* The signature detail: one word of a heading set in Playfair italic. */
+  .accent-word {
+    @apply font-serif font-normal italic;
+  }
+
+  .card-title {
+    @apply text-[20px] font-semibold tracking-[-0.01em] text-ink;
+  }
+
+  .body-text {
+    @apply text-[16px] font-normal text-muted;
+  }
+
+  .label {
+    @apply text-[13px] font-semibold tracking-wide;
+  }
+
+  /* Small outlined capsule above a title, as on the site's hero. */
+  .eyebrow {
+    @apply inline-flex items-center rounded-pill border border-line bg-surface/70 px-3.5 py-1.5 text-[13px] font-medium text-muted;
+  }
+
+  /* One definition for every text input on the auth and reflection forms,
+     so the field shape cannot drift between screens. */
+  .field {
+    @apply w-full rounded-card border border-line bg-surface px-3.5 py-3 text-[15px] text-ink transition-colors placeholder:text-faint hover:border-faint/40;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-6 py-3 text-[16px] font-medium transition-colors disabled:cursor-not-allowed;
+  }
+
+  .btn-brand {
+    @apply btn bg-brand text-white hover:bg-brandHover disabled:bg-brandMuted;
+  }
+
+  .btn-ghost {
+    @apply btn border border-line bg-surface text-ink hover:bg-canvas disabled:text-faint;
+  }
+
+  /* Dysrupit's CTA shape: pill with a circular arrow badge pinned right. */
+  .btn-arrow {
+    @apply btn relative bg-brand py-3.5 pl-7 pr-16 text-white hover:bg-brandHover disabled:bg-brandMuted;
+  }
+
+  .btn-arrow::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    height: 2.125rem;
+    width: 2.125rem;
+    border-radius: 9999px;
+    background-color: rgb(255 255 255 / 0.16);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17 17 7M9 7h8v8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1.05rem 1.05rem;
+  }
+
+  .btn-arrow-ghost {
+    @apply btn-arrow bg-navy hover:bg-navyDeep;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
