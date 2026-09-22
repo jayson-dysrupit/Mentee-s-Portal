@@ -194,6 +194,43 @@ supabase/migrations/   the schema, applied in order
 scripts/verify-schema.mjs
 ```
 
+## Deploying
+
+The build is static; any host that serves a folder will do. Two things trip up
+every first deploy:
+
+**1. The environment variables have to exist at build time.** Vite inlines
+`import.meta.env.VITE_*` into the bundle when it compiles — it does not read
+them at runtime. `.env` is gitignored on purpose, so a host that clones the
+repo has neither value and `isConfigured` comes out false: the deployed site
+shows the "connect Supabase" setup screen instead of the app. Set
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the host's project settings
+and then **redeploy** — adding a variable does not rebuild anything, so an
+existing deployment will never pick it up.
+
+**2. Deep links need an SPA rewrite.** The router uses HTML5 history mode, so
+`/team` and `/reset-password` are not files on disk. Without a catch-all
+rewrite to `index.html` they return 404 — and `/reset-password` is exactly
+where the password-reset email sends people. `vercel.json` in the repo root
+does this for Vercel:
+
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+```
+
+Netlify wants `/* /index.html 200` in a `_redirects` file; nginx wants
+`try_files $uri $uri/ /index.html`.
+
+**3. Tell Supabase about the new origin.** Under
+`Authentication → URL Configuration`, set the Site URL to the deployed origin
+and add these to Redirect URLs, or sign-in links and password resets will send
+people back to localhost:
+
+```
+https://your-app.vercel.app/**
+https://your-app.vercel.app/reset-password
+```
+
 ## Monitoring mentees
 
 `/team` is the supervisor and admin screen. It carries three things:
