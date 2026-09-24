@@ -125,6 +125,7 @@ for (const file of [
   '0002_policies.sql',
   '0003_seed_skills.sql',
   '0006_drop_supervisor_role.sql',
+  '0007_time_adjustments.sql',
 ]) {
   try {
     await db.exec(await readFile(join(MIGRATIONS, file), 'utf8'))
@@ -401,6 +402,107 @@ await equals(
   'Good catch. Read the policy docs I sent.',
   `select supervisor_comment from public.daily_logs where intern_id = $1 and log_date = current_date`,
   [ana],
+)
+
+await actingAsOwner()
+
+// ---------------------------------------------------------------- time adjustments
+section('Time adjustments (0007)')
+
+// What the day looked like before anyone touched it.
+// clock_in::text, because log_adjustments stores the cast and comparing a
+// JS Date against it only tests date formatting.
+const { rows: before } = await db.query(
+  `select id, clock_in, clock_in::text as clock_in_text
+     from public.daily_logs where intern_id = $1 and log_date = current_date`,
+  [ana],
+)
+const anaLog = before[0].id
+
+await actingAs(ana)
+await db.query(`update public.daily_logs set clock_in = now() - interval '5 hours' where id = $1`, [
+  anaLog,
+])
+await equals(
+  'an intern still cannot move her own clock-in',
+  String(before[0].clock_in),
+  `select clock_in from public.daily_logs where id = $1`,
+  [anaLog],
+)
+await deny(
+  'and she cannot call the adjust function either',
+  `select public.adjust_log_times($1, now(), null, null, 'nice try')`,
+  [anaLog],
+  'only an admin',
+)
+
+await actingAs(boss)
+await allow(
+  'an admin may correct a clock-in, through the function',
+  `select public.adjust_log_times($1, $2::timestamptz, null, null, 'Forgot to clock in after standup')`,
+  [anaLog, '2026-01-05 09:00:00+08'],
+)
+await equals(
+  'the correction lands',
+  '2026-01-05 01:00:00',
+  `select to_char(clock_in at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') from public.daily_logs where id = $1`,
+  [anaLog],
+)
+await equals(
+  'and is audited, against the admin who made it',
+  boss,
+  `select changed_by from public.log_adjustments where log_id = $1 and field = 'clock_in'`,
+  [anaLog],
+)
+await equals(
+  'the reason travels with it',
+  'Forgot to clock in after standup',
+  `select reason from public.log_adjustments where log_id = $1 and field = 'clock_in'`,
+  [anaLog],
+)
+await equals(
+  'the old value is kept, not just the new one',
+  before[0].clock_in_text,
+  `select old_value from public.log_adjustments where log_id = $1 and field = 'clock_in'`,
+  [anaLog],
+)
+
+// The audit is a trigger, so the ordinary UPDATE path is covered too — not
+// only the function the app happens to call.
+await db.query(`update public.daily_logs set break_minutes = 45 where id = $1`, [anaLog])
+await equals(
+  'a direct update is audited the same, with no function involved',
+  '45',
+  `select new_value from public.log_adjustments where log_id = $1 and field = 'break_minutes'`,
+  [anaLog],
+)
+
+await equals(
+  'an admin still cannot rewrite the intern own words',
+  'How RLS policies compose with OR.',
+  `select learned from public.daily_logs where id = $1`,
+  [anaLog],
+)
+
+await actingAs(ana)
+await equals(
+  'the intern can read the trail of changes to her own attendance',
+  2,
+  `select count(*) from public.log_adjustments where intern_id = $1`,
+  [ana],
+)
+await actingAs(ben)
+await equals(
+  'another intern cannot',
+  0,
+  `select count(*) from public.log_adjustments where intern_id = $1`,
+  [ana],
+)
+await deny(
+  'and nobody can erase an entry through the API',
+  `delete from public.log_adjustments where intern_id = $1`,
+  [ana],
+  'permission denied',
 )
 
 await actingAsOwner()

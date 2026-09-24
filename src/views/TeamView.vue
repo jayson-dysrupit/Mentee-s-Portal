@@ -4,10 +4,13 @@ import { computed, onMounted, ref } from 'vue'
 import CalendarMonth from '@/components/CalendarMonth.vue'
 import JournalCard from '@/components/JournalCard.vue'
 import NoticeBar from '@/components/NoticeBar.vue'
+import TimeEditDialog from '@/components/TimeEditDialog.vue'
 import TimeTable from '@/components/TimeTable.vue'
-import { fmtClock, fmtDate, fmtDayLabel, fmtHours } from '@/lib/format'
+import { downloadCsv, toCsv } from '@/lib/csv'
+import { fmtClock, fmtDate, fmtDayLabel, fmtHours, toLocalInput } from '@/lib/format'
+import { WORK_MODE_LABELS } from '@/lib/format'
 import { useTeamStore } from '@/stores/team'
-import type { DailyLogDetail } from '@/types/db'
+import type { DailyLogDetail, LogAdjustment, TimeAdjustment } from '@/types/db'
 
 const team = useTeamStore()
 const onlyUnreviewed = ref(true)
@@ -15,8 +18,14 @@ const onlyUnreviewed = ref(true)
 const selected = ref<string | null>(null)
 const view = ref<'table' | 'calendar'>('table')
 const selectedDay = ref<string | null>(null)
+const editing = ref<DailyLogDetail | null>(null)
+const saving = ref(false)
+const exportMonth = ref(new Date().toISOString().slice(0, 7))
 
-onMounted(() => void team.load())
+onMounted(() => {
+  void team.load()
+  void team.loadAdjustments()
+})
 
 const selectedMentee = computed(() => team.interns.find((i) => i.id === selected.value) ?? null)
 
@@ -71,6 +80,81 @@ const absent = computed(() => {
 
 async function onReview(logId: string, comment: string) {
   await team.review(logId, comment)
+}
+
+async function onSaveAdjustment(patch: TimeAdjustment) {
+  if (!editing.value) return
+  saving.value = true
+  const ok = await team.adjustTimes(editing.value.id, patch)
+  saving.value = false
+  if (ok) editing.value = null
+}
+
+/** '2026-09-24 09:02:00+00' is not reliably parseable; normalise it first. */
+function fmtAuditValue(a: LogAdjustment, raw: string | null): string {
+  if (!raw) return '—'
+  if (a.field === 'break_minutes') return `${raw}m`
+  const iso = raw.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  clock_in: 'Clock in',
+  clock_out: 'Clock out',
+  break_minutes: 'Break',
+}
+
+/** Local 'YYYY-MM-DD HH:MM' — a spreadsheet parses it, unlike an ISO Z string. */
+function csvStamp(iso: string | null): string {
+  return iso ? toLocalInput(new Date(iso)).replace('T', ' ') : ''
+}
+
+const exportRows = computed(() =>
+  scoped.value
+    .filter((l) => l.log_date.startsWith(exportMonth.value))
+    .slice()
+    .sort(
+      (a, b) => a.log_date.localeCompare(b.log_date) || a.intern_name.localeCompare(b.intern_name),
+    ),
+)
+
+function exportCsv() {
+  const headers = [
+    'Intern',
+    'Email',
+    'Date',
+    'Clock in',
+    'Clock out',
+    'Break (min)',
+    'Mode',
+    'Hours',
+    'Status',
+    'Reviewed',
+    'Skills',
+    'Worked on',
+    'Learned',
+  ]
+  const rows = exportRows.value.map((l) => [
+    l.intern_name,
+    l.intern_email,
+    l.log_date,
+    csvStamp(l.clock_in),
+    csvStamp(l.clock_out),
+    l.break_minutes,
+    WORK_MODE_LABELS[l.work_mode] ?? l.work_mode,
+    // Bare number, not "8.13 h" — the column has to sum in a spreadsheet.
+    l.hours_worked === null ? '' : Number(l.hours_worked).toFixed(2),
+    l.status === 'open' ? 'Open' : l.reviewed_at ? 'Reviewed' : 'Submitted',
+    l.reviewed_at ? csvStamp(l.reviewed_at) : '',
+    l.skills.join('; '),
+    l.worked_on ?? '',
+    l.learned ?? '',
+  ])
+  const who = selectedMentee.value
+    ? selectedMentee.value.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    : 'all-interns'
+  downloadCsv(`time-log-${exportMonth.value}-${who}.csv`, toCsv(headers, rows))
 }
 </script>
 
@@ -181,7 +265,9 @@ async function onReview(logId: string, comment: string) {
 
       <section class="mt-10">
         <div class="flex flex-wrap items-start gap-4">
-          <div class="flex-1">
+          <!-- min-w stops the controls squeezing the heading until it wraps
+               mid-phrase; below that width they take a line of their own. -->
+          <div class="min-w-[14rem] flex-1">
             <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Time rendered</h2>
             <p class="body-text mt-1 text-[14px]">
               {{
@@ -190,6 +276,27 @@ async function onReview(logId: string, comment: string) {
                   : 'Each day shows how many turned up and the hours they logged. Pick a day for the roster.'
               }}
             </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-2">
+              <span class="sr-only">Month to export</span>
+              <input v-model="exportMonth" type="month" class="field !w-auto !py-2 !text-[14px]" />
+            </label>
+            <button
+              type="button"
+              class="btn-ghost !px-4 !py-2 !text-[14px]"
+              :disabled="!exportRows.length"
+              :title="
+                exportRows.length
+                  ? `Export ${exportRows.length} rows as CSV`
+                  : 'Nothing logged in that month'
+              "
+              @click="exportCsv"
+            >
+              Export CSV
+              <span v-if="exportRows.length" class="text-faint">({{ exportRows.length }})</span>
+            </button>
           </div>
 
           <div class="flex gap-1 rounded-pill border border-line bg-surface p-1">
@@ -217,7 +324,14 @@ async function onReview(logId: string, comment: string) {
           No days logged yet.
         </p>
 
-        <TimeTable v-else-if="view === 'table'" :rows="scoped" show-intern class="mt-5" />
+        <TimeTable
+          v-else-if="view === 'table'"
+          :rows="scoped"
+          show-intern
+          editable
+          class="mt-5"
+          @edit="editing = $event"
+        />
 
         <template v-else>
           <CalendarMonth v-model:selected="selectedDay" :anchor="anchor" selectable class="mt-5">
@@ -286,6 +400,37 @@ async function onReview(logId: string, comment: string) {
         </template>
       </section>
 
+      <section v-if="team.adjustments.length" class="mt-12">
+        <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Corrections</h2>
+        <p class="body-text mt-1 text-[14px]">
+          Every change an admin made to a clock time. Written by the database, so it covers edits
+          made anywhere — not only the ones made on this page.
+        </p>
+
+        <ul class="mt-5 space-y-2">
+          <li
+            v-for="a in team.adjustments"
+            :key="a.id"
+            class="card flex flex-wrap items-baseline gap-x-3 gap-y-1 p-4"
+          >
+            <span class="text-[15px] font-medium text-ink">{{ a.intern_name }}</span>
+            <span class="text-[14px] text-faint">{{ fmtDate(a.log_date) }}</span>
+            <span class="label text-agent">{{ FIELD_LABELS[a.field] ?? a.field }}</span>
+            <span class="font-mono text-[13px] text-muted line-through">
+              {{ fmtAuditValue(a, a.old_value) }}
+            </span>
+            <span class="font-mono text-[13px] text-ink"
+              >→ {{ fmtAuditValue(a, a.new_value) }}</span
+            >
+            <span class="flex-1" />
+            <span class="text-[13px] text-faint">
+              {{ a.changed_by_name }} · {{ new Date(a.created_at).toLocaleString() }}
+            </span>
+            <p v-if="a.reason" class="w-full text-[14px] text-muted">"{{ a.reason }}"</p>
+          </li>
+        </ul>
+      </section>
+
       <section class="mt-12">
         <div class="flex flex-wrap items-center gap-3">
           <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Learning entries</h2>
@@ -320,5 +465,12 @@ async function onReview(logId: string, comment: string) {
         </div>
       </section>
     </template>
+
+    <TimeEditDialog
+      :log="editing"
+      :busy="saving"
+      @save="onSaveAdjustment"
+      @close="editing = null"
+    />
   </main>
 </template>

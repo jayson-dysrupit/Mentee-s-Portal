@@ -100,3 +100,30 @@ export interface ReflectionDraft {
   confidence: number | null
   break_minutes: number
 }
+
+export type AdjustableField = 'clock_in' | 'clock_out' | 'break_minutes'
+
+/** public.log_adjustment_details — one row per field an admin changed. */
+export interface LogAdjustment {
+  id: string
+  log_id: string
+  intern_id: string
+  changed_by: string
+  field: AdjustableField
+  old_value: string | null
+  new_value: string | null
+  reason: string | null
+  created_at: string
+  intern_name: string
+  intern_email: string
+  changed_by_name: string
+  log_date: string
+}
+
+/** What the admin's edit form submits; omitted fields are left alone. */
+export interface TimeAdjustment {
+  clock_in?: string | null
+  clock_out?: string | null
+  break_minutes?: number | null
+  reason: string
+}

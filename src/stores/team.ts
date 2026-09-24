@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { humanizeError, supabase } from '@/lib/supabase'
-import type { DailyLogDetail, InternProgress } from '@/types/db'
+import type { DailyLogDetail, InternProgress, LogAdjustment, TimeAdjustment } from '@/types/db'
 
 import { useAuthStore } from './auth'
 
@@ -16,12 +16,47 @@ export const useTeamStore = defineStore('team', () => {
 
   const interns = ref<InternProgress[]>([])
   const logs = ref<DailyLogDetail[]>([])
+  const adjustments = ref<LogAdjustment[]>([])
   const loading = ref(false)
   const error = ref('')
 
   const unreviewed = computed(() =>
     logs.value.filter((l) => l.status === 'submitted' && !l.reviewed_at),
   )
+
+  async function loadAdjustments() {
+    if (!auth.isAdmin) return
+    const { data, error: e } = await supabase
+      .from('log_adjustment_details')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (e) error.value = humanizeError(e)
+    else adjustments.value = (data as LogAdjustment[]) ?? []
+  }
+
+  /**
+   * Goes through the adjust_log_times function rather than a plain update so
+   * the reason reaches the audit trigger in the same transaction. A direct
+   * update would still be recorded — the trigger sees to that — but with no
+   * explanation attached.
+   */
+  async function adjustTimes(logId: string, patch: TimeAdjustment) {
+    const { error: e } = await supabase.rpc('adjust_log_times', {
+      p_log_id: logId,
+      p_clock_in: patch.clock_in ?? null,
+      p_clock_out: patch.clock_out ?? null,
+      p_break_minutes: patch.break_minutes ?? null,
+      p_reason: patch.reason.trim() || null,
+    })
+    if (e) {
+      error.value = humanizeError(e)
+      return false
+    }
+    await load()
+    await loadAdjustments()
+    return true
+  }
 
   async function load() {
     if (!auth.isAdmin) return
@@ -63,5 +98,16 @@ export const useTeamStore = defineStore('team', () => {
     return true
   }
 
-  return { interns, logs, loading, error, unreviewed, load, review }
+  return {
+    interns,
+    logs,
+    adjustments,
+    loading,
+    error,
+    unreviewed,
+    load,
+    loadAdjustments,
+    adjustTimes,
+    review,
+  }
 })

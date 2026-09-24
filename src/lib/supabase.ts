@@ -33,6 +33,7 @@ export function humanizeError(error: unknown): string {
       if (e.message?.includes('one_per_day')) return 'You have already clocked in today.'
       return 'That value is outside the allowed range.'
     case '42501':
+      if (e.message?.includes('adjust clock times')) return 'Only an admin can change clock times.'
       return 'You do not have access to that record.'
     default:
       if (e.message?.includes('duplicate key')) return 'You have already clocked in today.'

@@ -6,9 +6,13 @@ import type { DailyLogDetail } from '@/types/db'
 
 const props = defineProps<{
   rows: DailyLogDetail[]
-  /** Adds the "Who" column — used on the supervisor's screens. */
+  /** Adds the "Who" column — used on the admin's screens. */
   showIntern?: boolean
+  /** Adds a per-row Edit control. Admin only; the database enforces that. */
+  editable?: boolean
 }>()
+
+const emit = defineEmits<{ edit: [DailyLogDetail] }>()
 
 type SortKey =
   | 'log_date'
@@ -174,6 +178,9 @@ function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
                 </svg>
               </button>
             </th>
+            <th v-if="editable" scope="col" class="px-3 py-3 text-right">
+              <span class="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
 
@@ -205,6 +212,15 @@ function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
               >
                 {{ statusLabel(l) }}
               </span>
+            </td>
+            <td v-if="editable" class="px-3 py-3 text-right lg:px-4">
+              <button
+                type="button"
+                class="rounded-pill border border-line px-3 py-1 text-[13px] text-muted transition-colors hover:border-brand hover:text-brand"
+                @click="emit('edit', l)"
+              >
+                Edit
+              </button>
             </td>
           </tr>
         </tbody>

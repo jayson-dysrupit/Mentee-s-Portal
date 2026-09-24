@@ -19,14 +19,15 @@ npm run type-check
 
 **2. Run the migrations.** Open the SQL editor and run, in order:
 
-| File                                                | What it does                                    |
-| --------------------------------------------------- | ----------------------------------------------- |
-| `supabase/migrations/0001_schema.sql`               | tables, constraints, guard triggers, read views |
-| `supabase/migrations/0002_policies.sql`             | row level security and grants                   |
-| `supabase/migrations/0003_seed_skills.sql`          | the skill tag list                              |
-| `supabase/migrations/0004_optional_domain_lock.sql` | **skip this one** — see below                   |
-| `supabase/migrations/0005_revoke_anon.sql`          | takes the signed-out role off the public schema |
-| `supabase/migrations/0006_drop_supervisor_role.sql` | two roles only: `intern` and `admin`            |
+| File                                                | What it does                                      |
+| --------------------------------------------------- | ------------------------------------------------- |
+| `supabase/migrations/0001_schema.sql`               | tables, constraints, guard triggers, read views   |
+| `supabase/migrations/0002_policies.sql`             | row level security and grants                     |
+| `supabase/migrations/0003_seed_skills.sql`          | the skill tag list                                |
+| `supabase/migrations/0004_optional_domain_lock.sql` | **skip this one** — see below                     |
+| `supabase/migrations/0005_revoke_anon.sql`          | takes the signed-out role off the public schema   |
+| `supabase/migrations/0006_drop_supervisor_role.sql` | two roles only: `intern` and `admin`              |
+| `supabase/migrations/0007_time_adjustments.sql`     | admins may correct clock times; every edit logged |
 
 `0004` is deliberately not part of the run. It restricts signups to a list of
 company domains, and interns sign up with whatever personal mailbox they
@@ -251,6 +252,44 @@ https://your-app.vercel.app/reset-password
   attention first.
 - **Learning entries** — the reflections, filtered to awaiting-review by
   default, with inline feedback.
+- **Corrections** — the audit trail, below.
+
+### Correcting a clock time
+
+Until `0007` the clock stamps were pinned against every caller with a JWT, so
+fixing a mistyped day meant the SQL editor. An admin can now edit `clock_in`,
+`clock_out` and the break from the Edit control on each row of the time table.
+Everything the intern wrote stays pinned — correcting attendance is not editing
+someone's diary — and so do `intern_id` and `log_date`.
+
+Every change is recorded in `log_adjustments`: the field, the old value, the
+new one, which admin made it, when, and the reason they gave. That record is
+written by a trigger rather than by the app, which is the whole point — a
+correction made from the SQL editor, a script or a future client is logged
+identically. There is no path that edits a clock time quietly.
+
+The app calls `adjust_log_times()` rather than updating the table directly,
+because the reason has to reach the trigger inside the same transaction. A
+plain update still gets audited; it just arrives with no explanation attached.
+
+Interns can read their own adjustment rows — an audit trail the audited party
+cannot see is a weaker thing. Nobody can edit or delete an entry through the
+API: there is no policy for it, and `authenticated` has the write privileges
+revoked outright, so tampering is refused rather than silently filtered to
+zero rows.
+
+### Exporting a month
+
+The **Export CSV** button beside the month picker downloads the days in the
+chosen month — scoped to one mentee if you have drilled into one. Hours are a
+bare number so the column sums in a spreadsheet, and the file carries a BOM so
+Excel reads it as UTF-8.
+
+Fields are quoted per RFC 4180, so a reflection containing a comma, a quote or
+a newline cannot shift every later column. A leading `=`, `+`, `-` or `@` is
+prefixed with an apostrophe: a spreadsheet treats such a cell as a formula, and
+without this, text an intern typed into "what I learned" would be executed by
+Excel on the machine of whoever opens the export.
 
 An intern's own Time log carries the same two views: that table minus the Who
 column, and a calendar of hours per day with open days flagged. Both calendars
