@@ -14,11 +14,11 @@ const props = defineProps<{
    * then leads with whose entry it is, which is what varies inside a day.
    */
   hideDate?: boolean
-  reviewable?: boolean
+  replyable?: boolean
 }>()
-const emit = defineEmits<{ review: [string] }>()
+const emit = defineEmits<{ reply: [string] }>()
 
-const comment = ref(props.log.supervisor_comment ?? '')
+const comment = ref(props.log.reply ?? '')
 const open = ref(false)
 </script>
 
@@ -74,21 +74,21 @@ const open = ref(false)
     </div>
 
     <p
-      v-if="log.supervisor_comment"
+      v-if="log.reply"
       class="mt-5 rounded-card border-l-2 border-accent bg-accentSoft px-4 py-3 text-[15px] text-ink"
     >
       <span class="label mb-1 block text-faint">Your mentor</span>
-      {{ log.supervisor_comment }}
+      {{ log.reply }}
     </p>
 
-    <div v-if="reviewable" class="mt-5 border-t border-line pt-4">
+    <div v-if="replyable" class="mt-5 border-t border-line pt-4">
       <button
         v-if="!open"
         type="button"
         class="text-[14px] font-medium text-brand hover:text-brandHover"
         @click="open = true"
       >
-        {{ log.reviewed_at ? 'Edit reply' : 'Reply' }}
+        {{ log.replied_at ? 'Edit reply' : 'Reply' }}
       </button>
       <div v-else>
         <textarea
@@ -101,7 +101,7 @@ const open = ref(false)
           <button
             type="button"
             class="btn-brand !py-2 !text-[14px]"
-            @click="emit('review', comment)"
+            @click="emit('reply', comment)"
           >
             Save reply
           </button>

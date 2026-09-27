@@ -18,6 +18,7 @@ SQL editor, in order. **Skip `0004`.**
 | `0006_drop_supervisor_role` | two roles only: `intern` and `admin`               |
 | `0007_time_adjustments.sql` | admins may correct clock times; every edit logged  |
 | `0008_audit_deletions.sql`  | deletions logged too, and the log outlives the row |
+| `0009_rename_review_reply`  | column names match the UI: reply, not review       |
 
 `0004` restricts sign-up to company email domains. Interns sign up with
 personal addresses, so applying it rejects them inside the signup transaction

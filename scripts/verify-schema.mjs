@@ -127,6 +127,7 @@ for (const file of [
   '0006_drop_supervisor_role.sql',
   '0007_time_adjustments.sql',
   '0008_audit_deletions.sql',
+  '0009_rename_review_to_reply.sql',
 ]) {
   try {
     await db.exec(await readFile(join(MIGRATIONS, file), 'utf8'))
@@ -279,9 +280,9 @@ await equals(
   [ana],
 )
 await equals(
-  'intern_progress counts the review queue',
+  'intern_progress counts the entries with no reply',
   1,
-  `select awaiting_review from public.intern_progress where id = $1`,
+  `select awaiting_reply from public.intern_progress where id = $1`,
   [ana],
 )
 await equals(
@@ -354,13 +355,13 @@ await equals('the admin sees every profile', 6, `select count(*) from public.pro
 section('Column guards')
 await actingAs(ana)
 await db.query(
-  `update public.daily_logs set supervisor_comment = 'I approve of myself' where intern_id = $1 and log_date = current_date`,
+  `update public.daily_logs set reply = 'I approve of myself' where intern_id = $1 and log_date = current_date`,
   [ana],
 )
 await equals(
-  'an intern writing supervisor_comment is silently pinned back',
+  'an intern writing the reply column is silently pinned back',
   null,
-  `select supervisor_comment from public.daily_logs where intern_id = $1 and log_date = current_date`,
+  `select reply from public.daily_logs where intern_id = $1 and log_date = current_date`,
   [ana],
 )
 await db.query(`update public.profiles set role = 'admin' where id = $1`, [ana])
@@ -386,8 +387,8 @@ await allow(
 await actingAs(sup)
 await db.query(
   `update public.daily_logs
-     set supervisor_comment = 'Good catch. Read the policy docs I sent.',
-         reviewed_at = now(), reviewed_by = $2,
+     set reply = 'Good catch. Read the policy docs I sent.',
+         replied_at = now(), replied_by = $2,
          learned = 'REWRITTEN BY THE ADMIN'
    where intern_id = $1 and log_date = current_date`,
   [ana, sup],
@@ -401,7 +402,7 @@ await equals(
 await equals(
   'but the review itself lands',
   'Good catch. Read the policy docs I sent.',
-  `select supervisor_comment from public.daily_logs where intern_id = $1 and log_date = current_date`,
+  `select reply from public.daily_logs where intern_id = $1 and log_date = current_date`,
   [ana],
 )
 

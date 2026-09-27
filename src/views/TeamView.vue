@@ -46,7 +46,7 @@ const scoped = computed(() =>
 const entries = computed(() => {
   const written = scoped.value.filter((l) => (l.learned ?? '').trim().length > 0)
   return entryFilter.value === 'needs-reply'
-    ? written.filter((l) => l.status === 'submitted' && !l.reviewed_at)
+    ? written.filter((l) => l.status === 'submitted' && !l.replied_at)
     : written
 })
 
@@ -98,7 +98,7 @@ const absent = computed(() => {
 })
 
 async function onReply(logId: string, comment: string) {
-  await team.review(logId, comment)
+  await team.reply(logId, comment)
 }
 
 async function onDeleteLog(reason: string) {
@@ -158,7 +158,7 @@ function exportCsv() {
     // Bare number, not "8.13 h" — the column has to sum in a spreadsheet.
     l.hours_worked === null ? '' : Number(l.hours_worked).toFixed(2),
     l.status === 'open' ? 'Open' : 'Closed',
-    l.reviewed_at ? csvStamp(l.reviewed_at) : '',
+    l.replied_at ? csvStamp(l.replied_at) : '',
     l.skills.join('; '),
     l.worked_on ?? '',
     l.learned ?? '',
@@ -425,8 +425,8 @@ function exportCsv() {
                 :log="l"
                 show-intern
                 hide-date
-                reviewable
-                @review="(c) => onReply(l.id, c)"
+                replyable
+                @reply="(c) => onReply(l.id, c)"
               />
             </div>
           </section>

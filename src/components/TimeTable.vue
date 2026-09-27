@@ -62,12 +62,12 @@ function statusRank(row: DailyLogDetail): number {
   // Open first, then closed-but-unanswered, then replied to: sorting by
   // status should surface what still wants attention.
   if (row.status === 'open') return 0
-  return row.reviewed_at ? 2 : 1
+  return row.replied_at ? 2 : 1
 }
 
 function statusLabel(row: DailyLogDetail): string {
   if (row.status === 'open') return 'Open'
-  return row.reviewed_at ? 'Replied' : 'Closed'
+  return row.replied_at ? 'Replied' : 'Closed'
 }
 
 /** Minutes since local midnight. */
@@ -207,7 +207,7 @@ function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
                 :class="
                   l.status === 'open'
                     ? 'bg-warnSoft text-warn'
-                    : l.reviewed_at
+                    : l.replied_at
                       ? 'bg-accentSoft text-ink'
                       : 'bg-okSoft text-ok'
                 "

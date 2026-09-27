@@ -27,7 +27,7 @@ export const useTeamStore = defineStore('team', () => {
    * not a queue that blocks the intern.
    */
   const needsReply = computed(() =>
-    logs.value.filter((l) => l.status === 'submitted' && !l.reviewed_at),
+    logs.value.filter((l) => l.status === 'submitted' && !l.replied_at),
   )
 
   async function loadAdjustments() {
@@ -103,15 +103,15 @@ export const useTeamStore = defineStore('team', () => {
     loading.value = false
   }
 
-  /** The guard trigger keeps this write to the review columns only. */
-  async function review(logId: string, comment: string) {
+  /** The guard trigger keeps this write to the reply columns only. */
+  async function reply(logId: string, comment: string) {
     if (!auth.profile) return false
     const { error: e } = await supabase
       .from('daily_logs')
       .update({
-        supervisor_comment: comment.trim() || null,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: auth.profile.id,
+        reply: comment.trim() || null,
+        replied_at: new Date().toISOString(),
+        replied_by: auth.profile.id,
       })
       .eq('id', logId)
     if (e) {
@@ -133,6 +133,6 @@ export const useTeamStore = defineStore('team', () => {
     loadAdjustments,
     adjustTimes,
     deleteLog,
-    review,
+    reply,
   }
 })

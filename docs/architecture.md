@@ -49,7 +49,7 @@ column". So guard triggers pin the columns, and both are needed.
 
 **Interns** may write their own log for today or yesterday. Older rows are
 frozen — nobody back-files a week of attendance. They cannot touch
-`supervisor_comment`, their own `role`, or `required_hours`.
+the `reply` columns, their own `role`, or `required_hours`.
 
 **Admins** may read everything, reply to an entry, correct clock times and
 delete a day. They cannot rewrite `intern_id`, `log_date`, `work_mode`, or any word
@@ -93,6 +93,20 @@ revoked outright, so tampering is refused rather than filtered to zero rows.
 editor, a `service_role` key, a migration. `changed_by` must name a profile and
 those callers have none. The trail covers what the application and its users
 can do.
+
+## Naming
+
+`0009` renamed `supervisor_comment` → `reply`, `reviewed_at` → `replied_at`,
+`reviewed_by` → `replied_by`, and `intern_progress.awaiting_review` →
+`awaiting_reply`. "Review" implied an approval step that never existed, and a
+schema disagreeing with the screen is a trap for whoever reads it next.
+
+Three things do not follow a column rename, and each fails quietly: a plpgsql
+body is text, so `guard_log_columns()` would keep naming columns that no longer
+exist; a view's output column names are fixed at creation, so
+`daily_log_details` would still publish `supervisor_comment`; and an index name
+is cosmetic even though its predicate follows. `0009` restates the function and
+both views for that reason.
 
 ## Verifying the schema
 

@@ -92,9 +92,9 @@ function pct(i: InternProgress): number | null {
             </td>
             <td
               class="px-4 py-2.5 text-right font-mono"
-              :class="i.awaiting_review ? 'text-ink' : 'text-faint'"
+              :class="i.awaiting_reply ? 'text-ink' : 'text-faint'"
             >
-              {{ i.awaiting_review }}
+              {{ i.awaiting_reply }}
             </td>
             <td class="hidden px-4 py-2.5 text-muted md:table-cell">
               {{ fmtDate(i.last_log_date) }}

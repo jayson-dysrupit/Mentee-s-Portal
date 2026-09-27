@@ -46,9 +46,9 @@ export interface DailyLog {
   plan_tomorrow: string | null
   skills: string[]
   confidence: number | null
-  supervisor_comment: string | null
-  reviewed_at: string | null
-  reviewed_by: string | null
+  reply: string | null
+  replied_at: string | null
+  replied_by: string | null
   created_at: string
   updated_at: string
 }
@@ -77,7 +77,7 @@ export interface InternProgress {
   days_logged: number
   hours_logged: number
   days_open: number
-  awaiting_review: number
+  awaiting_reply: number
   last_log_date: string | null
 }
 
