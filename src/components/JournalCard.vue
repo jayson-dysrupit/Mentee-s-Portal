@@ -8,6 +8,12 @@ const props = defineProps<{
   log: DailyLogDetail
   /** Show whose entry this is — used on the admin's screens. */
   showIntern?: boolean
+  /**
+   * Drop the date from the heading. Set when the cards are already grouped
+   * under a date, where repeating it on every card is just noise; the card
+   * then leads with whose entry it is, which is what varies inside a day.
+   */
+  hideDate?: boolean
   reviewable?: boolean
 }>()
 const emit = defineEmits<{ review: [string] }>()
@@ -19,10 +25,12 @@ const open = ref(false)
 <template>
   <article class="card p-6">
     <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <h3 class="card-title">{{ fmtDayLabel(log.log_date) }}</h3>
-      <span v-if="showIntern" class="text-[14px] font-medium text-agent">{{
-        log.intern_name
-      }}</span>
+      <h3 class="card-title">
+        {{ hideDate ? log.intern_name : fmtDayLabel(log.log_date) }}
+      </h3>
+      <span v-if="showIntern && !hideDate" class="text-[14px] font-medium text-agent">
+        {{ log.intern_name }}
+      </span>
       <span class="flex-1" />
       <span class="font-mono text-[14px] text-muted">{{ fmtHours(log.hours_worked) }}</span>
       <span class="text-[13px] text-faint">
@@ -69,7 +77,7 @@ const open = ref(false)
       v-if="log.supervisor_comment"
       class="mt-5 rounded-card border-l-2 border-accent bg-accentSoft px-4 py-3 text-[15px] text-ink"
     >
-      <span class="label mb-1 block text-faint">Supervisor</span>
+      <span class="label mb-1 block text-faint">Your mentor</span>
       {{ log.supervisor_comment }}
     </p>
 
@@ -80,7 +88,7 @@ const open = ref(false)
         class="text-[14px] font-medium text-brand hover:text-brandHover"
         @click="open = true"
       >
-        {{ log.reviewed_at ? 'Edit feedback' : 'Leave feedback' }}
+        {{ log.reviewed_at ? 'Edit reply' : 'Reply' }}
       </button>
       <div v-else>
         <textarea
@@ -95,7 +103,7 @@ const open = ref(false)
             class="btn-brand !py-2 !text-[14px]"
             @click="emit('review', comment)"
           >
-            Save feedback
+            Save reply
           </button>
           <button type="button" class="btn-ghost !py-2 !text-[14px]" @click="open = false">
             Cancel

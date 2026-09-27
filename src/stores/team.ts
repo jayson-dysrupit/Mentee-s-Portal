@@ -20,7 +20,13 @@ export const useTeamStore = defineStore('team', () => {
   const loading = ref(false)
   const error = ref('')
 
-  const unreviewed = computed(() =>
+  /**
+   * Entries an admin has not replied to yet. Deliberately not called
+   * "unreviewed": nothing is approved here and nothing is gated on it. Hours
+   * count whether or not anyone reads the entry, so this is a reading list,
+   * not a queue that blocks the intern.
+   */
+  const needsReply = computed(() =>
     logs.value.filter((l) => l.status === 'submitted' && !l.reviewed_at),
   )
 
@@ -122,7 +128,7 @@ export const useTeamStore = defineStore('team', () => {
     adjustments,
     loading,
     error,
-    unreviewed,
+    needsReply,
     load,
     loadAdjustments,
     adjustTimes,

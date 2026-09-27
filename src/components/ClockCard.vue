@@ -50,7 +50,9 @@ const elapsed = useElapsed(computed(() => (clockedIn.value ? (props.log?.clock_i
         {{ fmtClock(log.clock_in) }} – {{ fmtClock(log.clock_out) }} · {{ log.break_minutes }} min
         break
       </p>
-      <p v-if="log.reviewed_at" class="mt-4 text-[14px] text-ok">Reviewed by your mentor.</p>
+      <p v-if="log.reviewed_at" class="mt-4 text-[14px] text-ok">
+        Your mentor replied to this day.
+      </p>
     </div>
 
     <!-- Not started. -->

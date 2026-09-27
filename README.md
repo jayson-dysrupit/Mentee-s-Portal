@@ -36,7 +36,7 @@ day. They see their own hours as a table or a calendar, and their own journal
 of what they learned.
 
 **Admins** see every intern: hours against target, days still open, entries
-awaiting review. They can read the reflections and leave feedback, correct a
+with no reply yet. They can read the reflections and reply, correct a
 mistyped clock time, delete a day, and export a month as CSV. They do not clock
 in themselves, so the intern screens are not shown to them.
 

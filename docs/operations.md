@@ -9,22 +9,27 @@ All of this lives on **Team**, which only admins see.
 
 | Task                    | Where                                           |
 | ----------------------- | ----------------------------------------------- |
-| See one intern only     | Click their card; click again to clear          |
+| See one intern only     | Click their name in the table; again to clear   |
 | Sort the time table     | Click any column heading                        |
 | See who was in on a day | Time rendered → **Calendar** → pick a day       |
 | Correct a clock time    | Time rendered → **Table** → **Edit** on the row |
+| See past corrections    | **Corrections** button, top right               |
 | Delete a day            | Same dialog → _Delete this day instead_         |
-| Leave feedback          | Learning entries → _Leave feedback_             |
+| Reply to an entry       | Learning entries → _Reply_                      |
 | Export a month          | Month picker → **Export CSV**                   |
 
 **Corrections and deletions both require a reason.** It is stored with your
-name and the old value, and shows up under _Corrections_ below the table. A
-deletion's record outlives the day it removed.
+name and the old value, and appears in the **Corrections** panel — the button
+at the top right. A deletion's record outlives the day it removed.
+
+**Replying is not approval.** Nothing is gated on it: hours count whether or
+not anyone reads the entry, and the intern never waits on you. The _No reply_
+filter is a reading list, not a queue.
 
 **Sorting notes.** In and Out sort by _time of day_, not absolute instant — the
 Day column already gives chronological order, so this answers "who starts
 late". Open days have no hours and sink to the bottom whichever way you sort.
-Status sorts Open → Submitted → Reviewed, so what needs attention is first.
+Status sorts Open → Closed → Replied, so what needs attention is first.
 
 **The CSV** covers the chosen month, scoped to one intern if you have drilled
 into one. Hours export as a bare number so the column sums.

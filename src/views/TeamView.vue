@@ -2,25 +2,33 @@
 import { computed, onMounted, ref } from 'vue'
 
 import CalendarMonth from '@/components/CalendarMonth.vue'
+import CorrectionsPanel from '@/components/CorrectionsPanel.vue'
 import JournalCard from '@/components/JournalCard.vue'
+import MenteeTable from '@/components/MenteeTable.vue'
 import NoticeBar from '@/components/NoticeBar.vue'
 import TimeEditDialog from '@/components/TimeEditDialog.vue'
 import TimeTable from '@/components/TimeTable.vue'
 import { downloadCsv, toCsv } from '@/lib/csv'
-import { fmtClock, fmtDate, fmtDayLabel, fmtHours, toLocalInput } from '@/lib/format'
-import { WORK_MODE_LABELS } from '@/lib/format'
+import { fmtClock, fmtDayLabel, fmtHours, toLocalInput, WORK_MODE_LABELS } from '@/lib/format'
 import { useTeamStore } from '@/stores/team'
-import type { DailyLogDetail, LogAdjustment, TimeAdjustment } from '@/types/db'
+import type { DailyLogDetail, TimeAdjustment } from '@/types/db'
 
 const team = useTeamStore()
-const onlyUnreviewed = ref(true)
 /** Mentee id being drilled into; null means everyone. */
 const selected = ref<string | null>(null)
 const view = ref<'table' | 'calendar'>('table')
 const selectedDay = ref<string | null>(null)
 const editing = ref<DailyLogDetail | null>(null)
 const saving = ref(false)
+const correctionsOpen = ref(false)
 const exportMonth = ref(new Date().toISOString().slice(0, 7))
+
+/**
+ * Defaults to everything. Replying is a reading habit, not an approval queue —
+ * nothing is gated on it and hours count either way — so opening on a filtered
+ * subset overstated the obligation.
+ */
+const entryFilter = ref<'all' | 'needs-reply'>('all')
 
 onMounted(() => {
   void team.load()
@@ -37,9 +45,20 @@ const scoped = computed(() =>
 /** The journal is the subset that actually carries a reflection. */
 const entries = computed(() => {
   const written = scoped.value.filter((l) => (l.learned ?? '').trim().length > 0)
-  return onlyUnreviewed.value
+  return entryFilter.value === 'needs-reply'
     ? written.filter((l) => l.status === 'submitted' && !l.reviewed_at)
     : written
+})
+
+/** Grouped by day, newest first — a flat list of twenty cards reads as noise. */
+const entryDays = computed(() => {
+  const m = new Map<string, DailyLogDetail[]>()
+  for (const l of entries.value) {
+    const list = m.get(l.log_date)
+    if (list) list.push(l)
+    else m.set(l.log_date, [l])
+  }
+  return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]))
 })
 
 function select(id: string) {
@@ -78,7 +97,7 @@ const absent = computed(() => {
   return roster.filter((i) => !here.has(i.id))
 })
 
-async function onReview(logId: string, comment: string) {
+async function onReply(logId: string, comment: string) {
   await team.review(logId, comment)
 }
 
@@ -96,30 +115,6 @@ async function onSaveAdjustment(patch: TimeAdjustment) {
   const ok = await team.adjustTimes(editing.value.id, patch)
   saving.value = false
   if (ok) editing.value = null
-}
-
-/** '2026-09-24 09:02:00+00' is not reliably parseable; normalise it first. */
-function fmtAuditValue(a: LogAdjustment, raw: string | null): string {
-  if (!raw) return '—'
-  if (a.field === 'break_minutes') return `${raw}m`
-  const iso = raw.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
-}
-
-/** What the deleted day held, read back out of the snapshot. */
-function snapshotSummary(a: LogAdjustment): string {
-  const snap = a.snapshot
-  if (!snap) return 'no snapshot'
-  const inAt = snap.clock_in ? fmtClock(String(snap.clock_in)) : '—'
-  const outAt = snap.clock_out ? fmtClock(String(snap.clock_out)) : 'still open'
-  return `${inAt}–${outAt}, ${snap.break_minutes ?? 0}m break`
-}
-
-const FIELD_LABELS: Record<string, string> = {
-  clock_in: 'Clock in',
-  clock_out: 'Clock out',
-  break_minutes: 'Break',
 }
 
 /** Local 'YYYY-MM-DD HH:MM' — a spreadsheet parses it, unlike an ISO Z string. */
@@ -147,7 +142,7 @@ function exportCsv() {
     'Mode',
     'Hours',
     'Status',
-    'Reviewed',
+    'Replied',
     'Skills',
     'Worked on',
     'Learned',
@@ -162,7 +157,7 @@ function exportCsv() {
     WORK_MODE_LABELS[l.work_mode] ?? l.work_mode,
     // Bare number, not "8.13 h" — the column has to sum in a spreadsheet.
     l.hours_worked === null ? '' : Number(l.hours_worked).toFixed(2),
-    l.status === 'open' ? 'Open' : l.reviewed_at ? 'Reviewed' : 'Submitted',
+    l.status === 'open' ? 'Open' : 'Closed',
     l.reviewed_at ? csvStamp(l.reviewed_at) : '',
     l.skills.join('; '),
     l.worked_on ?? '',
@@ -177,12 +172,41 @@ function exportCsv() {
 
 <template>
   <main class="mx-auto max-w-5xl px-6 py-10">
-    <h1 class="text-[34px] font-bold leading-tight tracking-[-0.02em]">
-      Your <span class="accent-word">mentees</span>
-    </h1>
-    <p class="body-text mt-2">
-      {{ team.interns.length }} assigned · {{ team.unreviewed.length }} entries awaiting review
-    </p>
+    <div class="flex flex-wrap items-start gap-4">
+      <div class="min-w-[14rem] flex-1">
+        <h1 class="text-[34px] font-bold leading-tight tracking-[-0.02em]">
+          Your <span class="accent-word">mentees</span>
+        </h1>
+        <p class="body-text mt-2">
+          {{ team.interns.length }} {{ team.interns.length === 1 ? 'intern' : 'interns' }} ·
+          {{ team.needsReply.length }} entries with no reply yet
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="btn-ghost !px-4 !py-2 !text-[14px]"
+        :aria-expanded="correctionsOpen"
+        aria-controls="corrections-panel"
+        @click="correctionsOpen = true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+        Corrections
+        <span v-if="team.adjustments.length" class="text-faint">
+          ({{ team.adjustments.length }})
+        </span>
+      </button>
+    </div>
 
     <NoticeBar :message="team.error" tone="error" class="mt-5" />
 
@@ -194,75 +218,18 @@ function exportCsv() {
         interns on their first sign-in, and appear here once they do.
       </p>
 
-      <div v-else class="mt-8 grid gap-3 sm:grid-cols-2">
-        <!-- A button, not a div: selecting a mentee is a real control and
-             should be reachable by keyboard like any other. -->
-        <button
-          v-for="i in team.interns"
-          :key="i.id"
-          type="button"
-          :aria-pressed="selected === i.id"
-          class="card p-5 text-left transition-colors"
-          :class="selected === i.id ? 'border-brand ring-1 ring-brand' : 'hover:border-faint/40'"
-          @click="select(i.id)"
-        >
-          <div class="flex items-baseline justify-between gap-3">
-            <p class="card-title">{{ i.full_name }}</p>
-            <span v-if="i.days_open" class="label text-warn">{{ i.days_open }} open</span>
-          </div>
-          <p class="mt-0.5 text-[13px] text-faint">{{ i.email }}</p>
-
-          <div class="mt-4 flex items-end gap-1.5">
-            <span class="font-mono text-[24px] font-medium leading-none text-ink">
-              {{ Number(i.hours_logged).toFixed(1) }}
-            </span>
-            <span v-if="i.required_hours" class="text-[14px] text-faint">
-              / {{ Number(i.required_hours).toFixed(0) }} h
-            </span>
-            <span v-else class="text-[14px] text-faint">h</span>
-          </div>
-
-          <div v-if="i.required_hours" class="mt-2 h-1.5 overflow-hidden rounded-pill bg-line">
-            <div
-              class="h-full rounded-pill bg-brand"
-              :style="{
-                width: `${Math.min(100, (Number(i.hours_logged) / Number(i.required_hours)) * 100)}%`,
-              }"
-            />
-          </div>
-          <p v-else class="mt-2 text-[12px] text-faint">No hour target set</p>
-
-          <dl class="mt-4 flex gap-5 text-[13px]">
-            <div>
-              <dt class="text-faint">Days</dt>
-              <dd class="font-mono text-ink">{{ i.days_logged }}</dd>
-            </div>
-            <div>
-              <dt class="text-faint">To review</dt>
-              <dd class="font-mono" :class="i.awaiting_review ? 'text-warn' : 'text-ink'">
-                {{ i.awaiting_review }}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-faint">Last log</dt>
-              <dd class="text-ink">{{ fmtDate(i.last_log_date) }}</dd>
-            </div>
-          </dl>
-
-          <p class="mt-3 text-[13px] font-medium text-brand">
-            {{
-              selected === i.id
-                ? 'Showing only this mentee — click to clear'
-                : 'View only this mentee →'
-            }}
-          </p>
-        </button>
-      </div>
+      <MenteeTable
+        v-else
+        :interns="team.interns"
+        :selected="selected"
+        class="mt-8"
+        @select="select"
+      />
 
       <!-- Scope banner, so it is never ambiguous whose numbers are on screen. -->
       <div
         v-if="selectedMentee"
-        class="mt-10 flex flex-wrap items-center gap-3 rounded-card border border-brand bg-brandSoft px-5 py-3"
+        class="mt-5 flex flex-wrap items-center gap-3 rounded-card border border-brand bg-brandSoft px-5 py-3"
       >
         <span class="label text-agent">Filtered</span>
         <span class="text-[15px] text-ink">
@@ -281,15 +248,13 @@ function exportCsv() {
 
       <section class="mt-10">
         <div class="flex flex-wrap items-start gap-4">
-          <!-- min-w stops the controls squeezing the heading until it wraps
-               mid-phrase; below that width they take a line of their own. -->
           <div class="min-w-[14rem] flex-1">
             <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Time rendered</h2>
             <p class="body-text mt-1 text-[14px]">
               {{
                 view === 'table'
-                  ? 'Click any column heading to sort.'
-                  : 'Each day shows how many turned up and the hours they logged. Pick a day for the roster.'
+                  ? 'Click any column heading to sort. Edit corrects a clock time.'
+                  : 'Each day shows how many turned up. Pick a day for the roster.'
               }}
             </p>
           </div>
@@ -303,11 +268,6 @@ function exportCsv() {
               type="button"
               class="btn-ghost !px-4 !py-2 !text-[14px]"
               :disabled="!exportRows.length"
-              :title="
-                exportRows.length
-                  ? `Export ${exportRows.length} rows as CSV`
-                  : 'Nothing logged in that month'
-              "
               @click="exportCsv"
             >
               Export CSV
@@ -416,80 +376,70 @@ function exportCsv() {
         </template>
       </section>
 
-      <section v-if="team.adjustments.length" class="mt-12">
-        <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Corrections</h2>
-        <p class="body-text mt-1 text-[14px]">
-          Every clock time an admin changed, and every day they deleted. Written by the database
-          rather than by this page, so it covers edits made anywhere — and a deletion's record
-          outlives the day it removed.
-        </p>
-
-        <ul class="mt-5 space-y-2">
-          <li
-            v-for="a in team.adjustments"
-            :key="a.id"
-            class="card flex flex-wrap items-baseline gap-x-3 gap-y-1 p-4"
-          >
-            <span class="text-[15px] font-medium text-ink">{{ a.intern_name }}</span>
-            <span class="text-[14px] text-faint">{{ fmtDate(a.log_date) }}</span>
-            <span
-              v-if="a.action === 'delete'"
-              class="label rounded-pill bg-warnSoft px-2 py-0.5 text-warn"
-            >
-              Day deleted
-            </span>
-            <span v-else class="label text-agent">
-              {{ a.field ? (FIELD_LABELS[a.field] ?? a.field) : 'Changed' }}
-            </span>
-            <span class="font-mono text-[13px] text-muted line-through">
-              {{ a.action === 'delete' ? snapshotSummary(a) : fmtAuditValue(a, a.old_value) }}
-            </span>
-            <span v-if="a.action !== 'delete'" class="font-mono text-[13px] text-ink"
-              >→ {{ fmtAuditValue(a, a.new_value) }}</span
-            >
-            <span class="flex-1" />
-            <span class="text-[13px] text-faint">
-              {{ a.changed_by_name }} · {{ new Date(a.created_at).toLocaleString() }}
-            </span>
-            <p v-if="a.reason" class="w-full text-[14px] text-muted">"{{ a.reason }}"</p>
-          </li>
-        </ul>
-      </section>
-
       <section class="mt-12">
         <div class="flex flex-wrap items-center gap-3">
           <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Learning entries</h2>
           <span class="flex-1" />
-          <button
-            type="button"
-            class="rounded-pill border px-3.5 py-1.5 text-[13px] transition-colors"
-            :class="
-              onlyUnreviewed
-                ? 'border-brand bg-brandSoft font-medium text-agent'
-                : 'border-line bg-surface text-muted hover:bg-canvas'
-            "
-            @click="onlyUnreviewed = !onlyUnreviewed"
-          >
-            {{ onlyUnreviewed ? 'Awaiting review' : 'All entries' }}
-          </button>
+          <div class="flex gap-1 rounded-pill border border-line bg-surface p-1">
+            <button
+              v-for="f in [
+                { key: 'all' as const, label: 'All' },
+                { key: 'needs-reply' as const, label: `No reply (${team.needsReply.length})` },
+              ]"
+              :key="f.key"
+              type="button"
+              class="rounded-pill px-3.5 py-1.5 text-[13px] transition-colors"
+              :class="
+                entryFilter === f.key
+                  ? 'bg-brandSoft font-medium text-agent'
+                  : 'text-muted hover:bg-canvas'
+              "
+              @click="entryFilter = f.key"
+            >
+              {{ f.label }}
+            </button>
+          </div>
         </div>
 
-        <p v-if="!entries.length" class="card mt-5 p-8 text-center text-[15px] text-faint">
-          {{ onlyUnreviewed ? 'Nothing waiting on you. Nice.' : 'No entries yet.' }}
+        <p v-if="!entryDays.length" class="card mt-5 p-8 text-center text-[15px] text-faint">
+          {{
+            entryFilter === 'needs-reply'
+              ? 'You have replied to everything. Nice.'
+              : 'No entries yet.'
+          }}
         </p>
 
-        <div v-else class="mt-5 space-y-4">
-          <JournalCard
-            v-for="l in entries"
-            :key="l.id"
-            :log="l"
-            show-intern
-            reviewable
-            @review="(c) => onReview(l.id, c)"
-          />
+        <!-- Grouped by day: a flat run of cards gives no sense of when. -->
+        <div v-else class="mt-5 space-y-8">
+          <section v-for="[date, dayEntries] in entryDays" :key="date">
+            <div class="mb-3 flex items-baseline gap-2 border-b border-line pb-1.5">
+              <h3 class="text-[15px] font-semibold text-ink">{{ fmtDayLabel(date) }}</h3>
+              <span class="text-[13px] text-faint">
+                {{ dayEntries.length }} {{ dayEntries.length === 1 ? 'entry' : 'entries' }}
+              </span>
+            </div>
+            <div class="space-y-3">
+              <JournalCard
+                v-for="l in dayEntries"
+                :key="l.id"
+                :log="l"
+                show-intern
+                hide-date
+                reviewable
+                @review="(c) => onReply(l.id, c)"
+              />
+            </div>
+          </section>
         </div>
       </section>
     </template>
+
+    <CorrectionsPanel
+      id="corrections-panel"
+      :open="correctionsOpen"
+      :adjustments="team.adjustments"
+      @close="correctionsOpen = false"
+    />
 
     <TimeEditDialog
       :log="editing"

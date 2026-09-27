@@ -59,13 +59,15 @@ const columns = computed(() =>
 )
 
 function statusRank(row: DailyLogDetail): number {
+  // Open first, then closed-but-unanswered, then replied to: sorting by
+  // status should surface what still wants attention.
   if (row.status === 'open') return 0
   return row.reviewed_at ? 2 : 1
 }
 
 function statusLabel(row: DailyLogDetail): string {
   if (row.status === 'open') return 'Open'
-  return row.reviewed_at ? 'Reviewed' : 'Submitted'
+  return row.reviewed_at ? 'Replied' : 'Closed'
 }
 
 /** Minutes since local midnight. */

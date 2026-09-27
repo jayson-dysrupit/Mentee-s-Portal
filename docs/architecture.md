@@ -51,8 +51,8 @@ column". So guard triggers pin the columns, and both are needed.
 frozen — nobody back-files a week of attendance. They cannot touch
 `supervisor_comment`, their own `role`, or `required_hours`.
 
-**Admins** may read everything, leave feedback, correct clock times and delete
-a day. They cannot rewrite `intern_id`, `log_date`, `work_mode`, or any word
+**Admins** may read everything, reply to an entry, correct clock times and
+delete a day. They cannot rewrite `intern_id`, `log_date`, `work_mode`, or any word
 the intern wrote. Correcting attendance is not editing someone's diary.
 
 **Signed-out callers** get nothing. `0005` revokes the `public` schema from
