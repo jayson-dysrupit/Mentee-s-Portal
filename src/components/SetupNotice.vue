@@ -49,7 +49,7 @@ import BrandMark from '@/components/BrandMark.vue'
 
     <p class="mt-8 text-[14px] text-faint">
       Full walkthrough, including how to make yourself the first admin, is in
-      <span class="font-mono">README.md</span>.
+      <span class="font-mono">docs/setup.md</span>.
     </p>
   </main>
 </template>
