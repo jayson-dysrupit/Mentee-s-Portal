@@ -5,7 +5,7 @@ import { fmtDayLabel, toLocalInput } from '@/lib/format'
 import type { DailyLogDetail, TimeAdjustment } from '@/types/db'
 
 const props = defineProps<{ log: DailyLogDetail | null; busy?: boolean }>()
-const emit = defineEmits<{ save: [TimeAdjustment]; close: [] }>()
+const emit = defineEmits<{ save: [TimeAdjustment]; remove: [string]; close: [] }>()
 
 // A native <dialog> rather than a hand-rolled overlay: it traps focus, closes
 // on Escape and marks the rest of the page inert, all without us maintaining
@@ -17,6 +17,7 @@ const clockOut = ref('')
 const breakMinutes = ref(60)
 const reason = ref('')
 const localError = ref('')
+const confirmingDelete = ref(false)
 
 watch(
   () => props.log,
@@ -30,6 +31,7 @@ watch(
     breakMinutes.value = log.break_minutes
     reason.value = ''
     localError.value = ''
+    confirmingDelete.value = false
     if (!el.value?.open) el.value?.showModal()
   },
 )
@@ -44,6 +46,15 @@ const changed = computed(() => {
     breakMinutes.value !== log.break_minutes
   )
 })
+
+function askDelete() {
+  localError.value = ''
+  if (!reason.value.trim()) {
+    localError.value = 'Give a reason first — it is kept after the day is gone.'
+    return
+  }
+  confirmingDelete.value = true
+}
 
 function submit() {
   localError.value = ''
@@ -129,6 +140,48 @@ function submit() {
         <button type="button" class="btn-ghost !py-2.5 !text-[15px]" @click="emit('close')">
           Cancel
         </button>
+      </div>
+
+      <div class="mt-6 border-t border-line pt-4">
+        <template v-if="!confirmingDelete">
+          <button
+            type="button"
+            class="text-[14px] font-medium text-warn transition-colors hover:underline"
+            @click="askDelete"
+          >
+            Delete this day instead
+          </button>
+          <p class="mt-1 text-[13px] text-faint">
+            Removes the attendance and the reflection. The record that you deleted it, and why, is
+            kept.
+          </p>
+        </template>
+
+        <template v-else>
+          <p class="text-[15px] font-medium text-ink">
+            Delete {{ log.intern_name }}'s {{ fmtDayLabel(log.log_date) }}?
+          </p>
+          <p class="mt-1 text-[13px] text-muted">
+            The hours and everything they wrote go for good. This cannot be undone.
+          </p>
+          <div class="mt-3 flex gap-2">
+            <button
+              type="button"
+              class="btn !bg-warn !py-2 !text-[14px] !text-white hover:!brightness-95"
+              :disabled="busy"
+              @click="emit('remove', reason)"
+            >
+              {{ busy ? 'Deleting…' : 'Yes, delete it' }}
+            </button>
+            <button
+              type="button"
+              class="btn-ghost !py-2 !text-[14px]"
+              @click="confirmingDelete = false"
+            >
+              Keep it
+            </button>
+          </div>
+        </template>
       </div>
     </form>
   </dialog>

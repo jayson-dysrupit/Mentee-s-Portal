@@ -103,21 +103,29 @@ export interface ReflectionDraft {
 
 export type AdjustableField = 'clock_in' | 'clock_out' | 'break_minutes'
 
-/** public.log_adjustment_details — one row per field an admin changed. */
+/**
+ * public.log_adjustment_details — one row per field an admin changed, or one
+ * row for a day they deleted. `log_id` goes null when the day is removed: the
+ * audit has to outlive the record it describes.
+ */
 export interface LogAdjustment {
   id: string
-  log_id: string
+  log_id: string | null
   intern_id: string
   changed_by: string
-  field: AdjustableField
+  /** Stored on the row, not joined — an intern cannot read an admin's profile. */
+  changed_by_name: string | null
+  action: 'adjust' | 'delete'
+  field: AdjustableField | null
   old_value: string | null
   new_value: string | null
+  /** The whole deleted row, for action === 'delete'. */
+  snapshot: Record<string, unknown> | null
   reason: string | null
   created_at: string
+  log_date: string
   intern_name: string
   intern_email: string
-  changed_by_name: string
-  log_date: string
 }
 
 /** What the admin's edit form submits; omitted fields are left alone. */

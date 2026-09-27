@@ -19,15 +19,16 @@ npm run type-check
 
 **2. Run the migrations.** Open the SQL editor and run, in order:
 
-| File                                                | What it does                                      |
-| --------------------------------------------------- | ------------------------------------------------- |
-| `supabase/migrations/0001_schema.sql`               | tables, constraints, guard triggers, read views   |
-| `supabase/migrations/0002_policies.sql`             | row level security and grants                     |
-| `supabase/migrations/0003_seed_skills.sql`          | the skill tag list                                |
-| `supabase/migrations/0004_optional_domain_lock.sql` | **skip this one** — see below                     |
-| `supabase/migrations/0005_revoke_anon.sql`          | takes the signed-out role off the public schema   |
-| `supabase/migrations/0006_drop_supervisor_role.sql` | two roles only: `intern` and `admin`              |
-| `supabase/migrations/0007_time_adjustments.sql`     | admins may correct clock times; every edit logged |
+| File                                                | What it does                                       |
+| --------------------------------------------------- | -------------------------------------------------- |
+| `supabase/migrations/0001_schema.sql`               | tables, constraints, guard triggers, read views    |
+| `supabase/migrations/0002_policies.sql`             | row level security and grants                      |
+| `supabase/migrations/0003_seed_skills.sql`          | the skill tag list                                 |
+| `supabase/migrations/0004_optional_domain_lock.sql` | **skip this one** — see below                      |
+| `supabase/migrations/0005_revoke_anon.sql`          | takes the signed-out role off the public schema    |
+| `supabase/migrations/0006_drop_supervisor_role.sql` | two roles only: `intern` and `admin`               |
+| `supabase/migrations/0007_time_adjustments.sql`     | admins may correct clock times; every edit logged  |
+| `supabase/migrations/0008_audit_deletions.sql`      | deletions logged too, and the log outlives the row |
 
 `0004` is deliberately not part of the run. It restricts signups to a list of
 company domains, and interns sign up with whatever personal mailbox they
@@ -272,11 +273,30 @@ The app calls `adjust_log_times()` rather than updating the table directly,
 because the reason has to reach the trigger inside the same transaction. A
 plain update still gets audited; it just arrives with no explanation attached.
 
+`0008` extends the same trail to deletions, and fixes a flaw in `0007` while it
+is there: `log_id` cascaded, so deleting a day also deleted its own correction
+history — the audit vanished with the evidence. The key is now
+`on delete set null`, and each row carries its own `log_date` plus a jsonb
+`snapshot` of the deleted record, so it still means something once the day is
+gone.
+
+The actor's name is stored on the audit row rather than joined. The view runs
+`security_invoker`, so an intern reading their own trail brings their own RLS
+to the join — and an intern may read only their own profile. Joining `profiles`
+to name the admin matched nothing, and the inner join then dropped the intern's
+row entirely: the audited party could not see their own trail. Storing the name
+is also the more honest record, since it says who the actor was at the time.
+
 Interns can read their own adjustment rows — an audit trail the audited party
 cannot see is a weaker thing. Nobody can edit or delete an entry through the
 API: there is no policy for it, and `authenticated` has the write privileges
 revoked outright, so tampering is refused rather than silently filtered to
 zero rows.
+
+**What the trail does not cover:** anything done with no end-user JWT — the SQL
+editor, a `service_role` key, a migration. `changed_by` has to name a profile
+and those callers have none. The trail covers what the application and its
+users can do, which is the threat it was built for.
 
 ### Exporting a month
 

@@ -95,7 +95,7 @@ const field =
         placeholder="One thing you understand now that you did not this morning."
       />
       <span v-if="touched && missingLearned" class="mt-1 block text-[13px] text-warn">
-        Required — this is the part your supervisor actually reads.
+        Required — this is the part your mentor actually reads.
       </span>
     </label>
 

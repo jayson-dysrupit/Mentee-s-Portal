@@ -126,6 +126,7 @@ for (const file of [
   '0003_seed_skills.sql',
   '0006_drop_supervisor_role.sql',
   '0007_time_adjustments.sql',
+  '0008_audit_deletions.sql',
 ]) {
   try {
     await db.exec(await readFile(join(MIGRATIONS, file), 'utf8'))
@@ -503,6 +504,97 @@ await deny(
   `delete from public.log_adjustments where intern_id = $1`,
   [ana],
   'permission denied',
+)
+
+await actingAsOwner()
+
+// ---------------------------------------------------------------- deletions
+section('Deletion audit (0008)')
+
+// A throwaway day of Olive's, so nothing else in this file is disturbed.
+const { rows: tmp } = await db.query(
+  `insert into public.daily_logs (intern_id, log_date, clock_in, clock_out, worked_on, learned)
+   values ($1, current_date - 3,
+           now() - interval '3 days',
+           now() - interval '3 days' + interval '8 hours',
+           'Ran the migration', 'That cascade deletes evidence')
+   returning id`,
+  [other],
+)
+const doomed = tmp[0].id
+
+await actingAs(boss)
+await allow(
+  'the day is corrected first, so it has a history to lose',
+  `select public.adjust_log_times($1, now() - interval '3 days' - interval '1 hour', null, null, 'shifted')`,
+  [doomed],
+)
+await equals(
+  'one correction on record',
+  1,
+  `select count(*) from public.log_adjustments where log_id = $1 and action = 'adjust'`,
+  [doomed],
+)
+
+await actingAs(ana)
+await deny(
+  'an intern cannot delete a day',
+  `select public.delete_log($1, 'not mine to remove')`,
+  [doomed],
+  'only an admin',
+)
+
+await actingAs(boss)
+await allow(
+  'an admin can, through the function',
+  `select public.delete_log($1, 'Duplicate of the Tuesday entry')`,
+  [doomed],
+)
+await equals('and the day is gone', 0, `select count(*) from public.daily_logs where id = $1`, [
+  doomed,
+])
+
+// The regression this migration exists for: before 0008 the cascade took the
+// correction history out with the row it described.
+await equals(
+  'the earlier correction survived the delete',
+  1,
+  `select count(*) from public.log_adjustments where intern_id = $1 and action = 'adjust'`,
+  [other],
+)
+await equals(
+  'its log_id was nulled, not cascaded away',
+  null,
+  `select log_id from public.log_adjustments where intern_id = $1 and action = 'adjust'`,
+  [other],
+)
+await equals(
+  'the deletion itself is on record',
+  'Duplicate of the Tuesday entry',
+  `select reason from public.log_adjustments where intern_id = $1 and action = 'delete'`,
+  [other],
+)
+await equals(
+  'with a snapshot of what was destroyed',
+  'That cascade deletes evidence',
+  `select snapshot ->> 'learned' from public.log_adjustments where intern_id = $1 and action = 'delete'`,
+  [other],
+)
+await equals(
+  'and the date it covered, without needing the row',
+  true,
+  `select log_date = current_date - 3 from public.log_adjustments
+    where intern_id = $1 and action = 'delete'`,
+  [other],
+)
+
+await actingAs(other)
+await equals(
+  'the intern can see that her day was deleted, and by whom',
+  1,
+  `select count(*) from public.log_adjustment_details
+    where intern_id = $1 and action = 'delete' and changed_by_name is not null`,
+  [other],
 )
 
 await actingAsOwner()

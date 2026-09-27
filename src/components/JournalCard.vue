@@ -6,7 +6,7 @@ import type { DailyLogDetail } from '@/types/db'
 
 const props = defineProps<{
   log: DailyLogDetail
-  /** Show whose entry this is — used on the supervisor's screens. */
+  /** Show whose entry this is — used on the admin's screens. */
   showIntern?: boolean
   reviewable?: boolean
 }>()

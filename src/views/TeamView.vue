@@ -82,6 +82,14 @@ async function onReview(logId: string, comment: string) {
   await team.review(logId, comment)
 }
 
+async function onDeleteLog(reason: string) {
+  if (!editing.value) return
+  saving.value = true
+  const ok = await team.deleteLog(editing.value.id, reason)
+  saving.value = false
+  if (ok) editing.value = null
+}
+
 async function onSaveAdjustment(patch: TimeAdjustment) {
   if (!editing.value) return
   saving.value = true
@@ -97,6 +105,15 @@ function fmtAuditValue(a: LogAdjustment, raw: string | null): string {
   const iso = raw.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
+}
+
+/** What the deleted day held, read back out of the snapshot. */
+function snapshotSummary(a: LogAdjustment): string {
+  const snap = a.snapshot
+  if (!snap) return 'no snapshot'
+  const inAt = snap.clock_in ? fmtClock(String(snap.clock_in)) : '—'
+  const outAt = snap.clock_out ? fmtClock(String(snap.clock_out)) : 'still open'
+  return `${inAt}–${outAt}, ${snap.break_minutes ?? 0}m break`
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -173,9 +190,8 @@ function exportCsv() {
 
     <template v-else>
       <p v-if="!team.interns.length" class="card mt-8 p-8 text-center text-[15px] text-faint">
-        No mentees are visible to you yet. A supervisor sees only the people whose
-        <span class="font-mono">profiles.supervisor_id</span> points at them; an admin sees
-        everyone.
+        No interns have signed up yet. Every admin sees every intern — new accounts arrive as
+        interns on their first sign-in, and appear here once they do.
       </p>
 
       <div v-else class="mt-8 grid gap-3 sm:grid-cols-2">
@@ -403,8 +419,9 @@ function exportCsv() {
       <section v-if="team.adjustments.length" class="mt-12">
         <h2 class="text-[24px] font-semibold tracking-[-0.01em]">Corrections</h2>
         <p class="body-text mt-1 text-[14px]">
-          Every change an admin made to a clock time. Written by the database, so it covers edits
-          made anywhere — not only the ones made on this page.
+          Every clock time an admin changed, and every day they deleted. Written by the database
+          rather than by this page, so it covers edits made anywhere — and a deletion's record
+          outlives the day it removed.
         </p>
 
         <ul class="mt-5 space-y-2">
@@ -415,11 +432,19 @@ function exportCsv() {
           >
             <span class="text-[15px] font-medium text-ink">{{ a.intern_name }}</span>
             <span class="text-[14px] text-faint">{{ fmtDate(a.log_date) }}</span>
-            <span class="label text-agent">{{ FIELD_LABELS[a.field] ?? a.field }}</span>
-            <span class="font-mono text-[13px] text-muted line-through">
-              {{ fmtAuditValue(a, a.old_value) }}
+            <span
+              v-if="a.action === 'delete'"
+              class="label rounded-pill bg-warnSoft px-2 py-0.5 text-warn"
+            >
+              Day deleted
             </span>
-            <span class="font-mono text-[13px] text-ink"
+            <span v-else class="label text-agent">
+              {{ a.field ? (FIELD_LABELS[a.field] ?? a.field) : 'Changed' }}
+            </span>
+            <span class="font-mono text-[13px] text-muted line-through">
+              {{ a.action === 'delete' ? snapshotSummary(a) : fmtAuditValue(a, a.old_value) }}
+            </span>
+            <span v-if="a.action !== 'delete'" class="font-mono text-[13px] text-ink"
               >→ {{ fmtAuditValue(a, a.new_value) }}</span
             >
             <span class="flex-1" />
@@ -470,6 +495,7 @@ function exportCsv() {
       :log="editing"
       :busy="saving"
       @save="onSaveAdjustment"
+      @remove="onDeleteLog"
       @close="editing = null"
     />
   </main>

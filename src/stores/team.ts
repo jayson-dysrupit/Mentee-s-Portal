@@ -58,6 +58,24 @@ export const useTeamStore = defineStore('team', () => {
     return true
   }
 
+  /**
+   * Deletes through delete_log so the reason reaches the audit trigger in the
+   * same transaction. The day goes; the record that it went does not.
+   */
+  async function deleteLog(logId: string, reason: string) {
+    const { error: e } = await supabase.rpc('delete_log', {
+      p_log_id: logId,
+      p_reason: reason.trim() || null,
+    })
+    if (e) {
+      error.value = humanizeError(e)
+      return false
+    }
+    await load()
+    await loadAdjustments()
+    return true
+  }
+
   async function load() {
     if (!auth.isAdmin) return
     loading.value = true
@@ -108,6 +126,7 @@ export const useTeamStore = defineStore('team', () => {
     load,
     loadAdjustments,
     adjustTimes,
+    deleteLog,
     review,
   }
 })

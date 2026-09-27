@@ -34,6 +34,7 @@ export function humanizeError(error: unknown): string {
       return 'That value is outside the allowed range.'
     case '42501':
       if (e.message?.includes('adjust clock times')) return 'Only an admin can change clock times.'
+      if (e.message?.includes('delete a day')) return 'Only an admin can delete a day.'
       return 'You do not have access to that record.'
     default:
       if (e.message?.includes('duplicate key')) return 'You have already clocked in today.'
